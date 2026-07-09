@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { fedapayUrl } from "@/lib/fedapay";
+import { PAYTECH_REQUEST_URL, paytechEnv } from "@/lib/paytech";
 
 const TIER_PRICES: Record<string, number> = {
   ESSENTIAL: 1500,
@@ -16,12 +16,13 @@ export async function startCheckoutAction(formData: FormData) {
   const tier = (formData.get("tier") as string) || "STANDARD";
   const amount = TIER_PRICES[tier] || 3500;
 
-  const apiKey = process.env.FEDAPAY_SECRET_KEY;
+  const apiKey = process.env.PAYTECH_API_KEY;
+  const apiSecret = process.env.PAYTECH_API_SECRET;
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-  // Demo/Mock mode when FedaPay credentials are not configured.
-  if (!apiKey || apiKey.trim() === "" || apiKey.startsWith("your_")) {
-    const mockId = `mock_fedapay_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  // Demo/Mock mode when PayTech credentials are not configured.
+  if (!apiKey || !apiSecret || apiKey.startsWith("your_")) {
+    const mockId = `mock_paytech_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const payment = await prisma.payment.create({
       data: {
         userId: user.id,
@@ -35,87 +36,72 @@ export async function startCheckoutAction(formData: FormData) {
     redirect(`/subscription/mock-checkout?paymentId=${payment.id}`);
   }
 
-  // Pre-create local payment record (used as our merchant reference).
+  // Pre-create local payment; its id is our PayTech ref_command.
   const payment = await prisma.payment.create({
     data: { userId: user.id, amount, currency: "XOF", status: "PENDING", tier },
   });
 
-  const [firstname, ...rest] = (user.name || "Utilisateur Prevora").trim().split(" ");
-  const lastname = rest.join(" ") || "Prevora";
-
-  // Keep every redirect() OUTSIDE the try — Next signals redirects by throwing,
-  // which a surrounding catch would swallow.
+  // Keep every redirect() OUTSIDE the try — Next signals redirects by throwing.
   let paymentUrl: string | undefined;
-  let transactionId: string | undefined;
+  let token: string | undefined;
   let failed = false;
 
   try {
-    // 1) Create the transaction.
-    const createRes = await fetch(fedapayUrl(apiKey, "/transactions"), {
+    const body: Record<string, unknown> = {
+      item_name: `Prevora ${tier} - 1 Mois`,
+      item_price: amount,
+      currency: "XOF",
+      ref_command: payment.id,
+      command_name: `Abonnement Prevora ${tier}`,
+      env: paytechEnv(),
+      success_url: `${baseUrl}/subscription/callback?paymentId=${payment.id}&status=success`,
+      cancel_url: `${baseUrl}/subscription/callback?paymentId=${payment.id}&status=cancel`,
+      custom_field: JSON.stringify({ payment_id: payment.id }),
+    };
+    // IPN must be HTTPS; only send it when we have a public https base.
+    if (baseUrl.startsWith("https://")) {
+      body.ipn_url = `${baseUrl}/api/webhooks/paytech`;
+    }
+
+    const res = await fetch(PAYTECH_REQUEST_URL, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        API_KEY: apiKey,
+        API_SECRET: apiSecret,
         "Content-Type": "application/json",
         Accept: "application/json",
       },
-      body: JSON.stringify({
-        description: `Prevora ${tier} - 1 Mois`,
-        amount,
-        currency: { iso: "XOF" },
-        callback_url: `${baseUrl}/subscription/callback?paymentId=${payment.id}`,
-        custom_metadata: { payment_id: payment.id },
-        customer: { firstname, lastname, email: user.email },
-      }),
+      body: JSON.stringify(body),
     });
 
-    if (!createRes.ok) {
-      console.error("FedaPay create failed:", await createRes.text());
+    if (!res.ok) {
+      console.error("PayTech request failed:", await res.text());
       failed = true;
     } else {
-      const data = await createRes.json();
-      const tx = data["v1/transaction"] || data.transaction || data;
-      transactionId = tx?.id != null ? String(tx.id) : undefined;
-
-      if (!transactionId) {
-        console.error("FedaPay: missing transaction id", data);
-        failed = true;
+      const data = await res.json();
+      if (data.success === 1 || data.success === "1") {
+        paymentUrl = data.redirect_url || data.redirectUrl;
+        token = data.token;
       } else {
-        // 2) Generate the payment token + checkout URL.
-        const tokRes = await fetch(
-          fedapayUrl(apiKey, `/transactions/${transactionId}/token`),
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${apiKey}`,
-              "Content-Type": "application/json",
-              Accept: "application/json",
-            },
-          },
-        );
-        if (!tokRes.ok) {
-          console.error("FedaPay token failed:", await tokRes.text());
-          failed = true;
-        } else {
-          const tok = await tokRes.json();
-          paymentUrl = tok.url || tok?.["v1/token"]?.url;
-        }
+        console.error("PayTech error response:", data);
+        failed = true;
       }
     }
   } catch (err) {
-    console.error("FedaPay error:", err);
+    console.error("PayTech error:", err);
     failed = true;
   }
 
-  if (failed) redirect("/subscription?error=fedapay_init");
+  if (failed) redirect("/subscription?error=paytech_init");
   if (!paymentUrl) {
-    console.error("FedaPay response missing payment URL");
-    redirect("/subscription?error=fedapay_response");
+    console.error("PayTech response missing redirect_url");
+    redirect("/subscription?error=paytech_response");
   }
 
-  if (transactionId) {
+  if (token) {
     await prisma.payment.update({
       where: { id: payment.id },
-      data: { providerRef: transactionId },
+      data: { providerRef: token },
     });
   }
 

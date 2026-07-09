@@ -1,10 +1,5 @@
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import {
-  fedapayUrl,
-  isFedapayApproved,
-  isFedapayFailed,
-} from "@/lib/fedapay";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle2, XCircle, Clock, RefreshCw } from "lucide-react";
@@ -15,40 +10,30 @@ export const metadata = { title: "Vérification du paiement" };
 
 type Outcome = "success" | "failed" | "pending";
 
-async function activatePremium(userId: string, tier: string) {
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 30);
-  await prisma.user.update({
-    where: { id: userId },
-    data: { isPremium: true, premiumExpiresAt: expiresAt, subscriptionTier: tier },
-  });
-}
-
+/**
+ * PayTech confirms payments via IPN (webhook), which is the source of truth.
+ * This page reflects the local payment status set by the IPN — it never
+ * activates on the redirect query alone (which is spoofable).
+ */
 export default async function CallbackPage({
   searchParams,
 }: {
-  searchParams: Promise<{
-    paymentId?: string;
-    status?: string;
-    transaction_id?: string;
-    id?: string;
-  }>;
+  searchParams: Promise<{ paymentId?: string; status?: string; token?: string }>;
 }) {
   const user = await requireUser();
   const params = await searchParams;
 
   const paymentId = params.paymentId;
-  // FedaPay appends its transaction id on redirect (`id`).
-  const fedapayTxId = params.id || params.transaction_id;
+  const token = params.token;
 
-  if (!paymentId && !fedapayTxId) redirect("/subscription");
+  if (!paymentId && !token) redirect("/subscription");
 
   const payment =
     (paymentId
       ? await prisma.payment.findFirst({ where: { id: paymentId, userId: user.id } })
       : null) ??
-    (fedapayTxId
-      ? await prisma.payment.findFirst({ where: { providerRef: fedapayTxId, userId: user.id } })
+    (token
+      ? await prisma.payment.findFirst({ where: { providerRef: token, userId: user.id } })
       : null);
 
   let outcome: Outcome = "pending";
@@ -62,45 +47,8 @@ export default async function CallbackPage({
   } else if (payment.status === "FAILED") {
     outcome = "failed";
     errorMsg = "Le paiement a échoué ou a été annulé.";
-  } else {
-    // Still PENDING locally — confirm live via FedaPay if we have a tx id.
-    const txId = fedapayTxId ?? payment.providerRef ?? null;
-    const apiKey = process.env.FEDAPAY_SECRET_KEY;
-
-    if (txId && apiKey && !apiKey.startsWith("your_")) {
-      try {
-        const res = await fetch(fedapayUrl(apiKey, `/transactions/${txId}`), {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            Accept: "application/json",
-          },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const tx = data["v1/transaction"] || data.transaction || data;
-          const status = tx?.status;
-          if (isFedapayApproved(status)) {
-            await prisma.payment.update({
-              where: { id: payment.id },
-              data: { status: "SUCCESS", providerRef: String(txId) },
-            });
-            await activatePremium(user.id, payment.tier);
-            outcome = "success";
-          } else if (isFedapayFailed(status)) {
-            await prisma.payment.update({
-              where: { id: payment.id },
-              data: { status: "FAILED" },
-            });
-            outcome = "failed";
-            errorMsg = `Statut du paiement : ${status}`;
-          }
-          // else pending / processing -> keep pending
-        }
-      } catch {
-        // network issue -> keep pending, webhook will finalize
-      }
-    }
   }
+  // else: still PENDING -> the IPN will finalize it shortly.
 
   if (outcome === "success") {
     return (
@@ -147,8 +95,8 @@ export default async function CallbackPage({
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
               Nous finalisons la validation de votre paiement. Cela prend
-              généralement quelques secondes. Rafraîchissez cette page ou
-              revenez d&apos;ici un instant.
+              généralement quelques secondes. Rafraîchissez cette page dans un
+              instant.
             </p>
           </CardContent>
           <CardFooter className="flex justify-center gap-3 pt-4">

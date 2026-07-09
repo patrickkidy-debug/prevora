@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { simulatePaymentAction } from "../actions";
 
-export const metadata = { title: "Simulateur de Paiement FedaPay" };
+export const metadata = { title: "Simulateur de Paiement PayTech" };
 
 export default async function MockCheckoutPage({
   searchParams,
@@ -49,10 +49,10 @@ export default async function MockCheckoutPage({
             <AlertTriangle className="size-6 animate-bounce" />
           </div>
           <CardTitle className="text-xl text-amber-700 dark:text-amber-500">
-            Simulateur de Paiement FedaPay
+            Simulateur de Paiement PayTech
           </CardTitle>
           <CardDescription className="text-amber-600/80">
-            Ce mode est activé car aucune clé API FedaPay n&apos;est définie.
+            Ce mode est activé car aucune clé API PayTech n&apos;est définie.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 text-sm text-muted-foreground">
