@@ -19,7 +19,7 @@ export default async function CallbackPage({
 
   const paymentId = params.paymentId;
   const statusParam = params.status;
-  const monerooTransactionId = params.transaction_id || params.id || params.paymentId;
+  const bictorysTransactionId = params.transaction_id || params.id || params.paymentId;
 
   let isSuccess = false;
   let errorMsg = "";
@@ -31,14 +31,16 @@ export default async function CallbackPage({
       errorMsg = "La simulation de paiement a échoué ou a été annulée.";
     }
   } 
-  // 2. Handling Real Moneroo checkout callback
-  else if (monerooTransactionId) {
-    // Look up pending payment record by Moneroo transaction ID
+  // 2. Handling Real Bictorys checkout callback
+  else if (bictorysTransactionId || paymentId) {
+    const transactionId = bictorysTransactionId || paymentId;
+    
+    // Look up pending payment record by Bictorys chargeId or local ID
     const payment = await prisma.payment.findFirst({
       where: {
         OR: [
-          { monerooId: monerooTransactionId },
-          { id: paymentId }
+          { bictorysId: transactionId },
+          { id: transactionId }
         ],
         userId: user.id,
       },
@@ -47,20 +49,25 @@ export default async function CallbackPage({
     if (payment) {
       if (payment.status === "SUCCESS") {
         isSuccess = true;
-      } else {
-        // Fetch transaction status from Moneroo API
-        const secretKey = process.env.MONEROO_SECRET_KEY;
-        if (secretKey) {
+      } else if (payment.bictorysId) {
+        // Fetch transaction status from Bictorys API
+        const apiKey = process.env.BICTORYS_API_KEY;
+        if (apiKey) {
           try {
-            const response = await fetch(`https://api.moneroo.io/v1/payments/${payment.monerooId}`, {
+            const isTest = apiKey.toLowerCase().includes("test") || apiKey.startsWith("pk_test") || apiKey.startsWith("sk_test");
+            const url = isTest 
+              ? `https://api.test.bictorys.com/pay/v1/charges/${payment.bictorysId}` 
+              : `https://api.bictorys.com/pay/v1/charges/${payment.bictorysId}`;
+
+            const response = await fetch(url, {
               headers: {
-                "Authorization": `Bearer ${secretKey}`,
+                "X-Api-Key": apiKey,
               },
             });
             if (response.ok) {
               const data = await response.json();
-              // Check Moneroo's payment status, usually 'approved' or 'success'
-              if (data.status === "approved" || data.status === "success") {
+              // Check Bictorys' payment status: 'success' or 'approved'
+              if (data.status === "success" || data.status === "approved" || data.status === "succès") {
                 // Update payment to SUCCESS
                 await prisma.payment.update({
                   where: { id: payment.id },
@@ -72,7 +79,11 @@ export default async function CallbackPage({
                 expiresAt.setDate(expiresAt.getDate() + 30);
                 await prisma.user.update({
                   where: { id: user.id },
-                  data: { isPremium: true, premiumExpiresAt: expiresAt, subscriptionTier: payment.tier },
+                  data: {
+                    isPremium: true,
+                    premiumExpiresAt: expiresAt,
+                    subscriptionTier: payment.tier,
+                  },
                 });
 
                 isSuccess = true;
@@ -84,15 +95,17 @@ export default async function CallbackPage({
                 errorMsg = `Le statut du paiement est : ${data.status}`;
               }
             } else {
-              errorMsg = "Impossible de valider le paiement auprès de Moneroo.";
+              errorMsg = "Impossible de valider le paiement auprès de Bictorys.";
             }
           } catch (err) {
-            console.error("Error verifying Moneroo payment:", err);
-            errorMsg = "Une erreur s'est produite lors de la connexion à l'API Moneroo.";
+            console.error("Error verifying Bictorys payment:", err);
+            errorMsg = "Une erreur s'est produite lors de la connexion à l'API Bictorys.";
           }
         } else {
-          errorMsg = "Configuration Moneroo manquante sur le serveur.";
+          errorMsg = "Configuration Bictorys manquante sur le serveur.";
         }
+      } else {
+        errorMsg = "Identifiant de transaction Bictorys manquant.";
       }
     } else {
       errorMsg = "Aucune transaction correspondante n'a été trouvée.";
@@ -116,10 +129,10 @@ export default async function CallbackPage({
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-foreground font-medium">
-              Votre abonnement Prevora Premium est maintenant activé.
+              Votre abonnement Prevora est maintenant activé.
             </p>
             <p className="text-sm text-muted-foreground">
-              Vous avez désormais accès à l&apos;intégralité des fonctionnalités : conseils santé IA, rapports détaillés et alertes en temps réel.
+              Vous avez désormais accès à l&apos;intégralité des fonctionnalités associées à votre offre Prevora.
             </p>
           </CardContent>
           <CardFooter className="flex justify-center pt-4">

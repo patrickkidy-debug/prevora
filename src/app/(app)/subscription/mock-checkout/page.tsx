@@ -67,7 +67,7 @@ export default async function MockCheckoutPage({
             </div>
             <div className="flex justify-between py-1">
               <span>Identifiant temporaire :</span>
-              <span className="font-mono text-xs">{payment.monerooId}</span>
+              <span className="font-mono text-xs">{payment.bictorysId}</span>
             </div>
           </div>
           <p className="text-center text-xs">

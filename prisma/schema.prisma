@@ -369,7 +369,7 @@ model Payment {
   amount     Float
   currency   String   @default("EUR")
   status     String   // "SUCCESS", "FAILED", "PENDING"
-  monerooId  String   @unique
+  bictorysId String?  @unique
   tier       String   @default("STANDARD")
   createdAt  DateTime @default(now())
 

@@ -15,12 +15,12 @@ export async function startCheckoutAction(formData: FormData) {
   const tier = (formData.get("tier") as string) || "STANDARD";
   const amount = TIER_PRICES[tier] || 3500;
   
-  const secretKey = process.env.MONEROO_SECRET_KEY;
+  const apiKey = process.env.BICTORYS_API_KEY;
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-  // Demo/Mock mode if Moneroo credentials are not configured
-  if (!secretKey || secretKey.trim() === "" || secretKey.startsWith("your_")) {
-    const mockId = `mock_moneroo_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  // Demo/Mock mode if Bictorys credentials are not configured
+  if (!apiKey || apiKey.trim() === "" || apiKey.startsWith("your_")) {
+    const mockId = `mock_bictorys_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     
     const payment = await prisma.payment.create({
       data: {
@@ -28,7 +28,7 @@ export async function startCheckoutAction(formData: FormData) {
         amount,
         currency: "XOF",
         status: "PENDING",
-        monerooId: mockId,
+        bictorysId: mockId,
         tier,
       },
     });
@@ -36,56 +36,64 @@ export async function startCheckoutAction(formData: FormData) {
     redirect(`/subscription/mock-checkout?paymentId=${payment.id}`);
   }
 
-  // Real Moneroo checkout
+  // Pre-create local payment record first to get a unique internal ID
+  const payment = await prisma.payment.create({
+    data: {
+      userId: user.id,
+      amount,
+      currency: "XOF",
+      status: "PENDING",
+      tier,
+    },
+  });
+
+  // Real Bictorys checkout
   try {
-    const response = await fetch("https://api.moneroo.io/v1/payments/initialize", {
+    const isTest = apiKey.toLowerCase().includes("test") || apiKey.startsWith("pk_test") || apiKey.startsWith("sk_test");
+    const url = isTest 
+      ? "https://api.test.bictorys.com/pay/v1/charges" 
+      : "https://api.bictorys.com/pay/v1/charges";
+
+    const response = await fetch(url, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${secretKey}`,
+        "X-Api-Key": apiKey,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
         amount,
         currency: "XOF",
-        description: `Prevora ${tier} - 1 Mois`,
-        customer: {
+        paymentReference: `Prevora ${tier} - 1 Mois`,
+        merchantReference: payment.id,
+        successRedirectUrl: `${baseUrl}/subscription/callback?paymentId=${payment.id}&status=success`,
+        errorRedirectUrl: `${baseUrl}/subscription/callback?paymentId=${payment.id}&status=failure`,
+        customerObject: {
           name: user.name || "Utilisateur Prevora",
           email: user.email,
-        },
-        return_url: `${baseUrl}/subscription/callback`,
-        metadata: {
-          userId: user.id,
-          tier,
         },
       }),
     });
 
     if (!response.ok) {
-      console.error("Moneroo initialization failed:", await response.text());
-      redirect("/subscription?error=moneroo_init");
+      console.error("Bictorys initialization failed:", await response.text());
+      redirect("/subscription?error=bictorys_init");
     }
 
     const data = await response.json();
-    if (!data.checkout_url || !data.id) {
-      console.error("Moneroo invalid response structure:", data);
-      redirect("/subscription?error=moneroo_response");
+    if (!data.paymentUrl || !data.chargeId) {
+      console.error("Bictorys invalid response structure:", data);
+      redirect("/subscription?error=bictorys_response");
     }
 
-    // Save pending payment record
-    await prisma.payment.create({
-      data: {
-        userId: user.id,
-        amount,
-        currency: "XOF",
-        status: "PENDING",
-        monerooId: data.id,
-        tier,
-      },
+    // Save Bictorys transaction identifier in the local payment record
+    await prisma.payment.update({
+      where: { id: payment.id },
+      data: { bictorysId: data.chargeId },
     });
 
-    redirect(data.checkout_url);
+    redirect(data.paymentUrl);
   } catch (err) {
-    console.error("Moneroo payment error:", err);
+    console.error("Bictorys payment error:", err);
     redirect("/subscription?error=checkout_error");
   }
 }
