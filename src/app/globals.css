@@ -1,26 +1,190 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+  Prevora design system — Apple Health / Google Fit inspired.
+  Palette: medical blue, white, light green, light gray.
+  Light + dark via next-themes `class` strategy.
+*/
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --radius: 0.85rem;
+
+  /* Base surfaces */
+  --background: oklch(0.99 0.004 240);
+  --foreground: oklch(0.22 0.02 250);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.02 250);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.02 250);
+
+  /* Medical blue — primary */
+  --primary: oklch(0.58 0.15 244);
+  --primary-foreground: oklch(0.99 0.01 240);
+
+  /* Light green — secondary/accent for wellness */
+  --secondary: oklch(0.95 0.03 160);
+  --secondary-foreground: oklch(0.35 0.06 165);
+  --accent: oklch(0.72 0.14 162);
+  --accent-foreground: oklch(0.99 0.01 160);
+
+  /* Neutral grays */
+  --muted: oklch(0.96 0.006 240);
+  --muted-foreground: oklch(0.52 0.02 250);
+  --border: oklch(0.91 0.008 245);
+  --input: oklch(0.91 0.008 245);
+  --ring: oklch(0.58 0.15 244);
+
+  /* Semantic */
+  --destructive: oklch(0.58 0.2 25);
+  --destructive-foreground: oklch(0.99 0.01 25);
+  --success: oklch(0.68 0.15 155);
+  --warning: oklch(0.78 0.14 75);
+
+  /* Score domain colors */
+  --score-sleep: oklch(0.62 0.14 275);
+  --score-stress: oklch(0.7 0.16 40);
+  --score-activity: oklch(0.68 0.15 155);
+  --score-nutrition: oklch(0.72 0.14 130);
+  --score-hydration: oklch(0.66 0.13 220);
+  --score-wellbeing: oklch(0.58 0.15 244);
+
+  /* Chart series */
+  --chart-1: oklch(0.58 0.15 244);
+  --chart-2: oklch(0.68 0.15 155);
+  --chart-3: oklch(0.7 0.16 40);
+  --chart-4: oklch(0.62 0.14 275);
+  --chart-5: oklch(0.72 0.14 130);
+
+  --sidebar: oklch(0.985 0.004 240);
+  --sidebar-foreground: oklch(0.22 0.02 250);
+  --sidebar-primary: oklch(0.58 0.15 244);
+  --sidebar-primary-foreground: oklch(0.99 0.01 240);
+  --sidebar-accent: oklch(0.95 0.03 160);
+  --sidebar-accent-foreground: oklch(0.35 0.06 165);
+  --sidebar-border: oklch(0.91 0.008 245);
+  --sidebar-ring: oklch(0.58 0.15 244);
+}
+
+.dark {
+  --background: oklch(0.16 0.015 250);
+  --foreground: oklch(0.94 0.008 240);
+  --card: oklch(0.2 0.018 252);
+  --card-foreground: oklch(0.94 0.008 240);
+  --popover: oklch(0.2 0.018 252);
+  --popover-foreground: oklch(0.94 0.008 240);
+
+  --primary: oklch(0.68 0.14 240);
+  --primary-foreground: oklch(0.15 0.02 250);
+
+  --secondary: oklch(0.26 0.03 165);
+  --secondary-foreground: oklch(0.9 0.04 160);
+  --accent: oklch(0.7 0.13 162);
+  --accent-foreground: oklch(0.15 0.02 160);
+
+  --muted: oklch(0.26 0.015 252);
+  --muted-foreground: oklch(0.68 0.02 245);
+  --border: oklch(0.3 0.015 252);
+  --input: oklch(0.32 0.015 252);
+  --ring: oklch(0.68 0.14 240);
+
+  --destructive: oklch(0.62 0.2 25);
+  --destructive-foreground: oklch(0.98 0.01 25);
+  --success: oklch(0.7 0.15 155);
+  --warning: oklch(0.8 0.14 75);
+
+  --score-sleep: oklch(0.68 0.14 275);
+  --score-stress: oklch(0.74 0.16 40);
+  --score-activity: oklch(0.72 0.15 155);
+  --score-nutrition: oklch(0.76 0.14 130);
+  --score-hydration: oklch(0.7 0.13 220);
+  --score-wellbeing: oklch(0.68 0.14 240);
+
+  --chart-1: oklch(0.68 0.14 240);
+  --chart-2: oklch(0.72 0.15 155);
+  --chart-3: oklch(0.74 0.16 40);
+  --chart-4: oklch(0.68 0.14 275);
+  --chart-5: oklch(0.76 0.14 130);
+
+  --sidebar: oklch(0.18 0.016 251);
+  --sidebar-foreground: oklch(0.94 0.008 240);
+  --sidebar-primary: oklch(0.68 0.14 240);
+  --sidebar-primary-foreground: oklch(0.15 0.02 250);
+  --sidebar-accent: oklch(0.26 0.03 165);
+  --sidebar-accent-foreground: oklch(0.9 0.04 160);
+  --sidebar-border: oklch(0.3 0.015 252);
+  --sidebar-ring: oklch(0.68 0.14 240);
 }
 
 @theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-score-sleep: var(--score-sleep);
+  --color-score-stress: var(--score-stress);
+  --color-score-activity: var(--score-activity);
+  --color-score-nutrition: var(--score-nutrition);
+  --color-score-hydration: var(--score-hydration);
+  --color-score-wellbeing: var(--score-wellbeing);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  border-color: var(--border);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Thin, unobtrusive scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }

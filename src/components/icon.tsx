@@ -1,0 +1,87 @@
+"use client";
+
+import {
+  Activity,
+  Apple,
+  Award,
+  BatteryCharging,
+  Bed,
+  BellRing,
+  Calendar,
+  CalendarDays,
+  Candy,
+  Cigarette,
+  ClipboardList,
+  Clock,
+  Droplet,
+  FileText,
+  Flame,
+  Footprints,
+  Heart,
+  HeartPulse,
+  LayoutDashboard,
+  MessageSquare,
+  Moon,
+  Pill,
+  Scale,
+  Settings,
+  Smile,
+  Stethoscope,
+  Target,
+  Thermometer,
+  TrendingDown,
+  TrendingUp,
+  User,
+  Wind,
+  Wine,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
+
+const ICONS: Record<string, LucideIcon> = {
+  activity: Activity,
+  apple: Apple,
+  award: Award,
+  "battery-charging": BatteryCharging,
+  bed: Bed,
+  "bell-ring": BellRing,
+  calendar: Calendar,
+  "calendar-days": CalendarDays,
+  candy: Candy,
+  cigarette: Cigarette,
+  "clipboard-list": ClipboardList,
+  clock: Clock,
+  droplet: Droplet,
+  "file-text": FileText,
+  flame: Flame,
+  footprints: Footprints,
+  heart: Heart,
+  "heart-pulse": HeartPulse,
+  "layout-dashboard": LayoutDashboard,
+  "message-square": MessageSquare,
+  moon: Moon,
+  pill: Pill,
+  scale: Scale,
+  settings: Settings,
+  smile: Smile,
+  stethoscope: Stethoscope,
+  target: Target,
+  thermometer: Thermometer,
+  "trending-down": TrendingDown,
+  "trending-up": TrendingUp,
+  user: User,
+  wind: Wind,
+  wine: Wine,
+  zap: Zap,
+};
+
+export function Icon({
+  name,
+  className,
+}: {
+  name: string;
+  className?: string;
+}) {
+  const Cmp = ICONS[name] ?? Activity;
+  return <Cmp className={className} />;
+}

@@ -1,0 +1,348 @@
+// Prevora — health prevention platform data model.
+// Postgres (Supabase). User rows mirror Supabase Auth users (id == auth uid).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Account & profile
+// ---------------------------------------------------------------------------
+
+enum Sex {
+  MALE
+  FEMALE
+  OTHER
+  UNDISCLOSED
+}
+
+model User {
+  id        String   @id @db.Uuid // == Supabase auth.users.id
+  email     String   @unique
+  name      String?
+  avatarUrl String?
+  birthDate DateTime? @db.Date
+  sex       Sex?
+  heightCm  Float?
+  weightKg  Float?
+  timezone  String   @default("Europe/Paris")
+  language  String   @default("fr")
+
+  // Gamification snapshot
+  level     Int      @default(1)
+  xp        Int      @default(0)
+
+  onboarded Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entries              DailyEntry[]
+  goals                Goal[]
+  alerts               Alert[]
+  reports              Report[]
+  userBadges           UserBadge[]
+  userChallenges       UserChallenge[]
+  streak               Streak?
+  notificationPrefs    NotificationPreference?
+  pushSubscriptions    PushSubscription[]
+  connectedSources     ConnectedSource[]
+
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Daily questionnaire entry + computed scores
+// ---------------------------------------------------------------------------
+
+model DailyEntry {
+  id     String   @id @default(uuid()) @db.Uuid
+  userId String   @db.Uuid
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Local calendar date of the entry (one per user per day).
+  date   DateTime @db.Date
+
+  // --- Core subjective metrics (0-10 scale unless noted) ---
+  sleepQuality     Int?
+  sleepHours       Float?
+  energy           Int?
+  mood             Int?
+  stress           Int?
+  anxiety          Int?
+  pain             Int?
+  fatigue          Int?
+  hydrationGlasses Int?
+  activityMinutes  Int?
+  activityType     String?
+  nutritionQuality Int?
+
+  // --- Optional objective vitals ---
+  weightKg      Float?
+  temperatureC  Float?
+  systolic      Int?
+  diastolic     Int?
+  heartRate     Int?
+  glucose       Float?
+
+  // --- Lifestyle / adherence ---
+  medicationTaken Boolean?
+  newSymptoms     String?
+  alcoholUnits    Float?
+  tobaccoCount    Int?
+  comments        String?
+
+  // Evolvable/extra answers keyed by question id (future-proof).
+  extra Json?
+
+  // --- Computed scores (0-100) ---
+  wellbeingScore Int?
+  sleepScore     Int?
+  stressScore    Int?
+  activityScore  Int?
+  nutritionScore Int?
+  hydrationScore Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("daily_entries")
+}
+
+// ---------------------------------------------------------------------------
+// Goals
+// ---------------------------------------------------------------------------
+
+enum GoalPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+model Goal {
+  id        String     @id @default(uuid()) @db.Uuid
+  userId    String     @db.Uuid
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  metric    String     // e.g. "sleepHours", "activityMinutes", "hydrationGlasses"
+  label     String
+  target    Float
+  unit      String
+  period    GoalPeriod @default(DAILY)
+  active    Boolean    @default(true)
+
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([userId])
+  @@map("goals")
+}
+
+// ---------------------------------------------------------------------------
+// Intelligent alerts
+// ---------------------------------------------------------------------------
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AlertStatus {
+  ACTIVE
+  READ
+  DISMISSED
+}
+
+model Alert {
+  id             String        @id @default(uuid()) @db.Uuid
+  userId         String        @db.Uuid
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type           String        // e.g. "persistent_fatigue", "sleep_drop", "weight_gain"
+  severity       AlertSeverity @default(INFO)
+  title          String
+  message        String
+  recommendation String?
+  consultAdvised Boolean       @default(false)
+  status         AlertStatus   @default(ACTIVE)
+
+  createdAt      DateTime      @default(now())
+
+  @@index([userId, status])
+  @@map("alerts")
+}
+
+// ---------------------------------------------------------------------------
+// AI reports & summaries
+// ---------------------------------------------------------------------------
+
+enum ReportType {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+model Report {
+  id          String     @id @default(uuid()) @db.Uuid
+  userId      String     @db.Uuid
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type        ReportType
+  periodStart DateTime   @db.Date
+  periodEnd   DateTime   @db.Date
+
+  summary     String     // human-readable narrative
+  data        Json?      // structured metrics/insights/recommendations
+  model       String?    // AI model/provider used
+  shareToken  String?    @unique // for secure share links
+
+  createdAt   DateTime   @default(now())
+
+  @@unique([userId, type, periodStart])
+  @@index([userId, type])
+  @@map("reports")
+}
+
+// ---------------------------------------------------------------------------
+// Gamification
+// ---------------------------------------------------------------------------
+
+model Badge {
+  id          String      @id @default(uuid()) @db.Uuid
+  code        String      @unique
+  name        String
+  description String
+  icon        String
+  tier        String      @default("bronze")
+
+  userBadges  UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id       String   @id @default(uuid()) @db.Uuid
+  userId   String   @db.Uuid
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badgeId  String   @db.Uuid
+  badge    Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  earnedAt DateTime @default(now())
+
+  @@unique([userId, badgeId])
+  @@map("user_badges")
+}
+
+model Streak {
+  userId        String   @id @db.Uuid
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  current       Int      @default(0)
+  longest       Int      @default(0)
+  lastEntryDate DateTime? @db.Date
+
+  @@map("streaks")
+}
+
+model Challenge {
+  id          String          @id @default(uuid()) @db.Uuid
+  code        String          @unique
+  title       String
+  description String
+  metric      String
+  target      Float
+  durationDays Int
+  reward      Int             @default(50) // xp
+
+  userChallenges UserChallenge[]
+
+  @@map("challenges")
+}
+
+model UserChallenge {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @db.Uuid
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challengeId String    @db.Uuid
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  progress    Float     @default(0)
+  completed   Boolean   @default(false)
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@unique([userId, challengeId])
+  @@map("user_challenges")
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+model NotificationPreference {
+  userId          String  @id @db.Uuid
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  pushEnabled     Boolean @default(true)
+  questionnaire   Boolean @default(true)
+  hydration       Boolean @default(true)
+  activity        Boolean @default(true)
+  sleep           Boolean @default(true)
+  medication      Boolean @default(false)
+
+  questionnaireAt String  @default("20:00") // HH:mm local
+  quietHoursStart String? @default("22:00")
+  quietHoursEnd   String? @default("07:00")
+
+  @@map("notification_preferences")
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+// ---------------------------------------------------------------------------
+// Connected health sources (future integrations)
+// ---------------------------------------------------------------------------
+
+enum ConnectedProvider {
+  APPLE_HEALTH
+  GOOGLE_HEALTH_CONNECT
+  GOOGLE_FIT
+  FITBIT
+  GARMIN
+  SAMSUNG_HEALTH
+}
+
+model ConnectedSource {
+  id           String            @id @default(uuid()) @db.Uuid
+  userId       String            @db.Uuid
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     ConnectedProvider
+  status       String            @default("disconnected")
+  accessToken  String?
+  refreshToken String?
+  expiresAt    DateTime?
+  lastSyncAt   DateTime?
+
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@unique([userId, provider])
+  @@map("connected_sources")
+}
