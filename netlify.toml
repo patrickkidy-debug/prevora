@@ -1,0 +1,10 @@
+# Netlify build config for Prevora (Next.js).
+# The official Next.js runtime plugin is auto-installed by Netlify.
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  # Prisma downloads the Linux engine at build time.
+  PRISMA_CLI_BINARY_TARGETS = "rhel-openssl-3.0.x"
