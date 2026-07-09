@@ -11,6 +11,8 @@ const PUBLIC_PATHS = [
   "/legal",
   "/share",
   "/offline",
+  "/api/webhooks", // provider IPNs — authenticated by signature, not cookies
+  "/api/cron", // scheduled jobs — authenticated by CRON_SECRET
 ];
 
 function isPublic(pathname: string) {
