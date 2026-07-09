@@ -32,6 +32,20 @@ export default async function QuestionnairePage() {
     }
   }
 
+  // Set default virtual switches based on whether there's data for them
+  const hasHabits = (defaults.alcoholUnits !== "" && defaults.alcoholUnits != null) || (defaults.tobaccoCount !== "" && defaults.tobaccoCount != null);
+  const hasMeds = defaults.medicationTaken !== "" && defaults.medicationTaken != null;
+  const hasVitals = (defaults.weightKg !== "" && defaults.weightKg != null) ||
+                    (defaults.temperatureC !== "" && defaults.temperatureC != null) ||
+                    (defaults.systolic !== "" && defaults.systolic != null) ||
+                    (defaults.diastolic !== "" && defaults.diastolic != null) ||
+                    (defaults.heartRate !== "" && defaults.heartRate != null) ||
+                    (defaults.glucose !== "" && defaults.glucose != null);
+
+  defaults.trackHabits = hasHabits;
+  defaults.trackMeds = hasMeds;
+  defaults.trackVitals = hasVitals;
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <Card>

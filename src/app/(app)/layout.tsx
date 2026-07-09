@@ -8,6 +8,7 @@ import { MobileSidebar } from "@/components/dashboard/mobile-sidebar";
 import { UserMenu } from "@/components/dashboard/user-menu";
 import { OfflineSync } from "@/components/pwa/offline-sync";
 import { MEDICAL_DISCLAIMER } from "@/config/site";
+import { PageTransition } from "@/components/ui/page-transition";
 
 export default async function AppLayout({
   children,
@@ -50,7 +51,7 @@ export default async function AppLayout({
         </header>
 
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-24 pt-6 sm:px-6 lg:pb-10">
-          {children}
+          <PageTransition>{children}</PageTransition>
         </main>
       </div>
 

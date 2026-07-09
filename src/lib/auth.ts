@@ -26,7 +26,43 @@ export const getCurrentUser = cache(async () => {
     where: { id: authUser.id },
     include: { streak: true, notificationPrefs: true },
   });
-  if (existing) return existing;
+
+  const now = new Date();
+  const trialDuration = 90 * 60 * 1000; // 1.5 hours in milliseconds
+
+  if (existing) {
+    const meta = authUser.user_metadata ?? {};
+    const metaName = meta.full_name ?? meta.name ?? null;
+    const metaAvatar = meta.avatar_url ?? meta.picture ?? null;
+
+    let needsUpdate = false;
+    const updateData: Record<string, any> = {};
+
+    if (!existing.trialStartedAt) {
+      updateData.trialStartedAt = now;
+      updateData.trialExpiresAt = new Date(now.getTime() + trialDuration);
+      needsUpdate = true;
+    }
+
+    if (metaName && existing.name !== metaName) {
+      updateData.name = metaName;
+      needsUpdate = true;
+    }
+
+    if (metaAvatar && existing.avatarUrl !== metaAvatar) {
+      updateData.avatarUrl = metaAvatar;
+      needsUpdate = true;
+    }
+
+    if (needsUpdate) {
+      return prisma.user.update({
+        where: { id: existing.id },
+        data: updateData,
+        include: { streak: true, notificationPrefs: true },
+      });
+    }
+    return existing;
+  }
 
   const meta = authUser.user_metadata ?? {};
   return prisma.user.create({
@@ -35,6 +71,8 @@ export const getCurrentUser = cache(async () => {
       email: authUser.email,
       name: meta.full_name ?? meta.name ?? null,
       avatarUrl: meta.avatar_url ?? meta.picture ?? null,
+      trialStartedAt: now,
+      trialExpiresAt: new Date(now.getTime() + trialDuration),
       streak: { create: {} },
       notificationPrefs: { create: {} },
     },

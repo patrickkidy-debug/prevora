@@ -15,6 +15,8 @@ import { StatTile } from "@/components/dashboard/stat-tile";
 import { AiSummaryCard } from "@/components/dashboard/ai-summary-card";
 import { TrendChart } from "@/components/dashboard/trend-chart";
 import { scoreLabel } from "@/lib/scoring";
+import { getUserPremiumStatus } from "@/lib/premium";
+import { PremiumPromo } from "@/components/dashboard/premium-promo";
 
 export const metadata = { title: "Tableau de bord" };
 
@@ -31,6 +33,15 @@ export default async function DashboardPage() {
     getRecentEntries(user.id, 30),
     getEntryForDate(user.id, new Date()),
   ]);
+
+  const premiumStatus = getUserPremiumStatus({
+    suspended: user.suspended,
+    isPremium: user.isPremium,
+    premiumExpiresAt: user.premiumExpiresAt,
+    trialExpiresAt: user.trialExpiresAt,
+  });
+
+  const isPremiumActive = premiumStatus.isPremium;
 
   const insight = await generateDailyInsight(recent);
   const analysis = analyzeEntries(recent);
@@ -54,7 +65,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-3 animate-in fade-in duration-500">
         <div>
           <p className="text-sm capitalize text-muted-foreground">
             {format(new Date(), "EEEE d MMMM", { locale: fr })}
@@ -77,6 +88,13 @@ export default async function DashboardPage() {
           </Button>
         </div>
       </div>
+
+      {/* Premium promotion banner/card */}
+      <PremiumPromo
+        trialExpiresAt={user.trialExpiresAt}
+        isPremium={user.isPremium}
+        premiumExpiresAt={user.premiumExpiresAt}
+      />
 
       {recent.length === 0 ? (
         <EmptyState />
@@ -112,7 +130,7 @@ export default async function DashboardPage() {
             </Card>
 
             <div className="lg:col-span-2">
-              <AiSummaryCard insight={insight} />
+              <AiSummaryCard insight={insight} isLocked={!isPremiumActive} />
             </div>
           </div>
 

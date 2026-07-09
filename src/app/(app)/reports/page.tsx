@@ -7,11 +7,24 @@ import { GenerateButtons } from "@/components/reports/generate-buttons";
 import { ReportCard } from "@/components/reports/report-card";
 import type { ReportData } from "@/lib/report-types";
 import { MEDICAL_DISCLAIMER } from "@/config/site";
+import { getUserPremiumStatus } from "@/lib/premium";
+import { redirect } from "next/navigation";
 
 export const metadata = { title: "Rapports" };
 
 export default async function ReportsPage() {
   const user = await requireUser();
+
+  const premiumStatus = getUserPremiumStatus({
+    suspended: user.suspended,
+    isPremium: user.isPremium,
+    premiumExpiresAt: user.premiumExpiresAt,
+    trialExpiresAt: user.trialExpiresAt,
+  });
+
+  if (!premiumStatus.isPremium) {
+    redirect("/subscription");
+  }
   const reports = await prisma.report.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: "desc" },

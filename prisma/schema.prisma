@@ -36,6 +36,13 @@ model User {
   timezone  String   @default("Europe/Paris")
   language  String   @default("fr")
 
+  // Premium & Trial status
+  isPremium        Boolean   @default(false)
+  premiumExpiresAt DateTime?
+  trialStartedAt   DateTime?
+  trialExpiresAt   DateTime?
+  suspended        Boolean   @default(false)
+
   // Gamification snapshot
   level     Int      @default(1)
   xp        Int      @default(0)
@@ -54,6 +61,7 @@ model User {
   notificationPrefs    NotificationPreference?
   pushSubscriptions    PushSubscription[]
   connectedSources     ConnectedSource[]
+  payments             Payment[]
 
   @@map("users")
 }
@@ -347,4 +355,21 @@ model ConnectedSource {
 
   @@unique([userId, provider])
   @@map("connected_sources")
+}
+
+// ---------------------------------------------------------------------------
+// Payment History
+// ---------------------------------------------------------------------------
+
+model Payment {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount     Float
+  currency   String   @default("EUR")
+  status     String   // "SUCCESS", "FAILED", "PENDING"
+  monerooId  String   @unique
+  createdAt  DateTime @default(now())
+
+  @@map("payments")
 }
