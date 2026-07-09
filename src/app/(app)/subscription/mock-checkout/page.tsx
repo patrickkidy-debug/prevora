@@ -59,11 +59,11 @@ export default async function MockCheckoutPage({
           <div className="rounded-lg bg-card p-4 border border-border/60 text-foreground">
             <div className="flex justify-between py-1">
               <span>Montant :</span>
-              <strong className="font-semibold">{payment.amount.toFixed(2)} {payment.currency}</strong>
+              <strong className="font-semibold">{payment.amount.toLocaleString()} FCFA</strong>
             </div>
             <div className="flex justify-between py-1">
               <span>Description :</span>
-              <span>Prevora Premium - 1 Mois</span>
+              <span>Prevora {payment.tier} - 1 Mois</span>
             </div>
             <div className="flex justify-between py-1">
               <span>Identifiant temporaire :</span>

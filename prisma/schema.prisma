@@ -42,6 +42,7 @@ model User {
   trialStartedAt   DateTime?
   trialExpiresAt   DateTime?
   suspended        Boolean   @default(false)
+  subscriptionTier String    @default("FREE") // "FREE", "ESSENTIAL", "STANDARD", "PREMIUM"
 
   // Gamification snapshot
   level     Int      @default(1)
@@ -369,6 +370,7 @@ model Payment {
   currency   String   @default("EUR")
   status     String   // "SUCCESS", "FAILED", "PENDING"
   monerooId  String   @unique
+  tier       String   @default("STANDARD")
   createdAt  DateTime @default(now())
 
   @@map("payments")

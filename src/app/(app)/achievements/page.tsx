@@ -12,10 +12,26 @@ import {
 } from "@/config/gamification";
 import { cn } from "@/lib/utils";
 
+import { getUserPremiumStatus } from "@/lib/premium";
+import { redirect } from "next/navigation";
+
 export const metadata = { title: "Récompenses" };
 
 export default async function AchievementsPage() {
   const user = await requireUser();
+
+  const premiumStatus = getUserPremiumStatus({
+    suspended: user.suspended,
+    isPremium: user.isPremium,
+    premiumExpiresAt: user.premiumExpiresAt,
+    trialExpiresAt: user.trialExpiresAt,
+    subscriptionTier: user.subscriptionTier,
+  });
+
+  if (premiumStatus.tier === "FREE" && premiumStatus.reason === "expired") {
+    redirect("/subscription");
+  }
+
   const [totalEntries, reportsCount, streak] = await Promise.all([
     prisma.dailyEntry.count({ where: { userId: user.id } }),
     prisma.report.count({ where: { userId: user.id } }),

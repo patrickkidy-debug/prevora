@@ -31,6 +31,7 @@ export async function POST(request: Request) {
     const status = verifiedData.status; // 'approved', 'success', 'failed', etc.
     const metadata = verifiedData.metadata || {};
     const userId = metadata.userId;
+    const tier = metadata.tier || "STANDARD";
 
     if (!userId) {
       return NextResponse.json({ error: "Missing userId in metadata" }, { status: 400 });
@@ -47,23 +48,24 @@ export async function POST(request: Request) {
       // Update existing record
       await prisma.payment.update({
         where: { id: payment.id },
-        data: { status: dbStatus },
+        data: { status: dbStatus, tier },
       });
     } else {
       // Create new record if it wasn't tracked yet
       await prisma.payment.create({
         data: {
           userId,
-          amount: parseFloat(verifiedData.amount || "9.99"),
-          currency: verifiedData.currency || "EUR",
+          amount: parseFloat(verifiedData.amount || "3500"),
+          currency: verifiedData.currency || "XOF",
           status: dbStatus,
           monerooId,
+          tier,
         },
       });
     }
 
     if (dbStatus === "SUCCESS") {
-      // Activate Premium
+      // Activate Premium & Tier
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 30);
       await prisma.user.update({
@@ -71,6 +73,7 @@ export async function POST(request: Request) {
         data: {
           isPremium: true,
           premiumExpiresAt: expiresAt,
+          subscriptionTier: tier,
         },
       });
     }

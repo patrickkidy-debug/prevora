@@ -2,12 +2,28 @@ import { requireUser } from "@/lib/auth";
 import { getRecentEntries } from "@/server/entries";
 import { toDateKey } from "@/lib/utils";
 import { HistoryView } from "@/components/history/history-view";
+import { getUserPremiumStatus } from "@/lib/premium";
+import { redirect } from "next/navigation";
 
 export const metadata = { title: "Historique" };
 
 export default async function HistoryPage() {
   const user = await requireUser();
-  const entries = await getRecentEntries(user.id, 365);
+
+  const premiumStatus = getUserPremiumStatus({
+    suspended: user.suspended,
+    isPremium: user.isPremium,
+    premiumExpiresAt: user.premiumExpiresAt,
+    trialExpiresAt: user.trialExpiresAt,
+    subscriptionTier: user.subscriptionTier,
+  });
+
+  if (premiumStatus.tier === "FREE" && premiumStatus.reason === "expired") {
+    redirect("/subscription");
+  }
+
+  const limit = premiumStatus.tier === "ESSENTIAL" ? 7 : 365;
+  const entries = await getRecentEntries(user.id, limit);
 
   const data = entries.map((e) => ({
     date: toDateKey(e.date),

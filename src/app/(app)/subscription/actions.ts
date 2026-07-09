@@ -4,8 +4,17 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export async function startCheckoutAction() {
+const TIER_PRICES: Record<string, number> = {
+  ESSENTIAL: 1500,
+  STANDARD: 3500,
+  PREMIUM: 5000,
+};
+
+export async function startCheckoutAction(formData: FormData) {
   const user = await requireUser();
+  const tier = (formData.get("tier") as string) || "STANDARD";
+  const amount = TIER_PRICES[tier] || 3500;
+  
   const secretKey = process.env.MONEROO_SECRET_KEY;
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
@@ -16,10 +25,11 @@ export async function startCheckoutAction() {
     const payment = await prisma.payment.create({
       data: {
         userId: user.id,
-        amount: 9.99,
-        currency: "EUR",
+        amount,
+        currency: "XOF",
         status: "PENDING",
         monerooId: mockId,
+        tier,
       },
     });
 
@@ -35,9 +45,9 @@ export async function startCheckoutAction() {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        amount: 9.99,
-        currency: "EUR",
-        description: "Prevora Premium - 1 Mois",
+        amount,
+        currency: "XOF",
+        description: `Prevora ${tier} - 1 Mois`,
         customer: {
           name: user.name || "Utilisateur Prevora",
           email: user.email,
@@ -45,6 +55,7 @@ export async function startCheckoutAction() {
         return_url: `${baseUrl}/subscription/callback`,
         metadata: {
           userId: user.id,
+          tier,
         },
       }),
     });
@@ -64,10 +75,11 @@ export async function startCheckoutAction() {
     await prisma.payment.create({
       data: {
         userId: user.id,
-        amount: 9.99,
-        currency: "EUR",
+        amount,
+        currency: "XOF",
         status: "PENDING",
         monerooId: data.id,
+        tier,
       },
     });
 
@@ -109,6 +121,7 @@ export async function simulatePaymentAction(paymentId: string, status: "SUCCESS"
       data: {
         isPremium: true,
         premiumExpiresAt: expiresAt,
+        subscriptionTier: payment.tier,
       },
     });
 

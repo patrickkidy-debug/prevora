@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { format, subDays } from "date-fns";
 import { fr } from "date-fns/locale";
+import { redirect } from "next/navigation";
 import { Flame, Plus, AlertTriangle, ArrowRight } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getRecentEntries, getEntryForDate } from "@/server/entries";
@@ -42,7 +43,12 @@ export default async function DashboardPage() {
     isPremium: user.isPremium,
     premiumExpiresAt: user.premiumExpiresAt,
     trialExpiresAt: user.trialExpiresAt,
+    subscriptionTier: user.subscriptionTier,
   });
+
+  if (premiumStatus.tier === "FREE" && premiumStatus.reason === "expired") {
+    redirect("/subscription");
+  }
 
   const isPremiumActive = premiumStatus.isPremium;
   const streak = user.streak?.current ?? 0;

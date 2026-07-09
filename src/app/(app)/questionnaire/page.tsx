@@ -4,6 +4,8 @@ import { allQuestions } from "@/config/questionnaire";
 import { emptyEntryValues } from "@/lib/validations/entry";
 import { toDateKey } from "@/lib/utils";
 import { QuestionnaireForm } from "@/components/questionnaire/questionnaire-form";
+import { getUserPremiumStatus } from "@/lib/premium";
+import { redirect } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -16,6 +18,19 @@ export const metadata = { title: "Questionnaire quotidien" };
 
 export default async function QuestionnairePage() {
   const user = await requireUser();
+
+  const premiumStatus = getUserPremiumStatus({
+    suspended: user.suspended,
+    isPremium: user.isPremium,
+    premiumExpiresAt: user.premiumExpiresAt,
+    trialExpiresAt: user.trialExpiresAt,
+    subscriptionTier: user.subscriptionTier,
+  });
+
+  if (premiumStatus.tier === "FREE" && premiumStatus.reason === "expired") {
+    redirect("/subscription");
+  }
+
   const today = toDateKey(new Date());
   const entry = await getEntryForDate(user.id, today);
 

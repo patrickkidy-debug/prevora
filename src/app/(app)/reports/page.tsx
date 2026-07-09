@@ -20,9 +20,10 @@ export default async function ReportsPage() {
     isPremium: user.isPremium,
     premiumExpiresAt: user.premiumExpiresAt,
     trialExpiresAt: user.trialExpiresAt,
+    subscriptionTier: user.subscriptionTier,
   });
 
-  if (!premiumStatus.isPremium) {
+  if (premiumStatus.tier !== "STANDARD" && premiumStatus.tier !== "PREMIUM") {
     redirect("/subscription");
   }
   const reports = await prisma.report.findMany({

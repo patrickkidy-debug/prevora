@@ -8,6 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { AddGoalDialog } from "@/components/goals/add-goal-dialog";
 import { DeleteGoalButton } from "@/components/goals/delete-goal-button";
 
+import { getUserPremiumStatus } from "@/lib/premium";
+import { redirect } from "next/navigation";
+
 export const metadata = { title: "Objectifs" };
 
 const PERIOD_LABEL: Record<string, string> = {
@@ -33,6 +36,19 @@ function currentValue(
 
 export default async function GoalsPage() {
   const user = await requireUser();
+
+  const premiumStatus = getUserPremiumStatus({
+    suspended: user.suspended,
+    isPremium: user.isPremium,
+    premiumExpiresAt: user.premiumExpiresAt,
+    trialExpiresAt: user.trialExpiresAt,
+    subscriptionTier: user.subscriptionTier,
+  });
+
+  if (premiumStatus.tier === "FREE" && premiumStatus.reason === "expired") {
+    redirect("/subscription");
+  }
+
   const [goals, entries] = await Promise.all([
     prisma.goal.findMany({
       where: { userId: user.id, active: true },

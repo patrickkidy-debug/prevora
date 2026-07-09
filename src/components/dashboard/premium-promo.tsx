@@ -87,7 +87,7 @@ export function PremiumPromo({
             </div>
             <Button asChild size="sm" className="bg-primary hover:bg-primary/95 text-white gap-1 shrink-0">
               <Link href="/subscription">
-                S&apos;abonner à vie <ArrowRight className="size-3.5" />
+                S&apos;abonner (Offre Standard) <ArrowRight className="size-3.5" />
               </Link>
             </Button>
           </CardContent>
@@ -111,15 +111,15 @@ export function PremiumPromo({
               <Sparkles className="size-4" />
             </span>
             <div className="space-y-1">
-              <p className="text-sm font-semibold">Passez à Prevora Premium</p>
+              <p className="text-sm font-semibold">Passez à l&apos;offre Standard Prevora</p>
               <p className="text-xs text-muted-foreground max-w-xl leading-relaxed">
-                Obtenez des résumés IA quotidiens, des bilans exportables en PDF, des alertes de constantes personnalisées et plus encore pour seulement <strong>9,99 €/mois</strong>.
+                Obtenez des résumés IA quotidiens, des bilans exportables en PDF, des alertes de constantes personnalisées et plus encore pour seulement <strong>3 500 FCFA / mois</strong>.
               </p>
             </div>
           </div>
           <Button asChild size="sm" className="bg-primary hover:bg-primary/95 text-white gap-1 shrink-0">
             <Link href="/subscription">
-              Débloquer Premium <ArrowRight className="size-3.5" />
+              Débloquer l&apos;offre Standard <ArrowRight className="size-3.5" />
             </Link>
           </Button>
         </CardContent>

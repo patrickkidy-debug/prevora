@@ -7,13 +7,25 @@ import { TrendingUp, Sparkles, Award, Star, CheckCircle2, ChevronRight, Lock } f
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ScoreHistoryCharts, type ScoreDataPoint } from "@/components/health-score/score-history-charts";
 
 export const metadata = { title: "Détails Score Santé Prevora" };
 
 export default async function HealthScorePage() {
   const user = await requireUser();
-  const premiumStatus = getUserPremiumStatus(user);
+  const premiumStatus = getUserPremiumStatus({
+    suspended: user.suspended,
+    isPremium: user.isPremium,
+    premiumExpiresAt: user.premiumExpiresAt,
+    trialExpiresAt: user.trialExpiresAt,
+    subscriptionTier: user.subscriptionTier,
+  });
+
+  if (premiumStatus.tier === "FREE" && premiumStatus.reason === "expired") {
+    redirect("/subscription");
+  }
+
   const isPremium = premiumStatus.isPremium;
 
   // Retrieve user entries
@@ -181,7 +193,7 @@ export default async function HealthScorePage() {
             weeklyData={weeklyData}
             monthlyData={monthlyData}
             annualData={annualData}
-            isPremium={isPremium}
+            tier={premiumStatus.tier}
             predictions={predictions}
           />
         </div>

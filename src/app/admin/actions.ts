@@ -54,6 +54,7 @@ export async function togglePremiumUserAction(targetUserId: string, activate: bo
     data: {
       isPremium: activate,
       premiumExpiresAt,
+      subscriptionTier: activate ? "STANDARD" : "FREE",
     },
   });
 

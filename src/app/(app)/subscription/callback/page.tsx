@@ -72,7 +72,7 @@ export default async function CallbackPage({
                 expiresAt.setDate(expiresAt.getDate() + 30);
                 await prisma.user.update({
                   where: { id: user.id },
-                  data: { isPremium: true, premiumExpiresAt: expiresAt },
+                  data: { isPremium: true, premiumExpiresAt: expiresAt, subscriptionTier: payment.tier },
                 });
 
                 isSuccess = true;

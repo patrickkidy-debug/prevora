@@ -17,13 +17,13 @@ export function ScoreHistoryCharts({
   weeklyData,
   monthlyData,
   annualData,
-  isPremium,
+  tier,
   predictions,
 }: {
   weeklyData: ScoreDataPoint[];
   monthlyData: ScoreDataPoint[];
   annualData: ScoreDataPoint[];
-  isPremium: boolean;
+  tier: string;
   predictions: ScoreDataPoint[];
 }) {
   const [activeTab, setActiveTab] = React.useState("weekly");
@@ -40,7 +40,8 @@ export function ScoreHistoryCharts({
   };
 
   const chartData = getDataForTab();
-  const isAnnualLocked = activeTab === "annual" && !isPremium;
+  const isAnnualLocked = activeTab === "annual" && (tier === "FREE" || tier === "ESSENTIAL");
+  const isPredictionsLocked = tier !== "PREMIUM";
 
   return (
     <div className="space-y-6">
@@ -52,7 +53,7 @@ export function ScoreHistoryCharts({
             <TabsTrigger value="monthly">Mensuel</TabsTrigger>
             <TabsTrigger value="annual" className="relative">
               Annuel
-              {!isPremium && <Lock className="ml-1 size-3 text-muted-foreground" />}
+              {(tier === "FREE" || tier === "ESSENTIAL") && <Lock className="ml-1 size-3 text-muted-foreground" />}
             </TabsTrigger>
           </TabsList>
           <span className="text-xs text-muted-foreground hidden sm:inline">
@@ -141,7 +142,7 @@ export function ScoreHistoryCharts({
 
       {/* Predictions Module */}
       <Card className="relative overflow-hidden">
-        {!isPremium && (
+        {isPredictionsLocked && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/70 backdrop-blur-md p-6 text-center animate-in fade-in duration-300">
             <span className="grid size-10 place-items-center rounded-full bg-primary/10 text-primary mb-2">
               <Sparkles className="size-5" />
@@ -163,7 +164,7 @@ export function ScoreHistoryCharts({
           </CardTitle>
           <CardDescription>Projection de l&apos;évolution de votre Score Santé</CardDescription>
         </CardHeader>
-        <CardContent className={`h-48 pl-0 pr-3 ${!isPremium ? "filter blur-sm select-none pointer-events-none" : ""}`}>
+        <CardContent className={`h-48 pl-0 pr-3 ${isPredictionsLocked ? "filter blur-sm select-none pointer-events-none" : ""}`}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={predictions} margin={{ top: 10, right: 10, bottom: 0, left: 10 }}>
               <CartesianGrid strokeDasharray="3 3" strokeDashoffset={2} vertical={false} stroke="var(--color-border)" />
