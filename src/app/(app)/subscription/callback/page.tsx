@@ -1,129 +1,110 @@
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isBictorysPaid } from "@/lib/bictorys";
+import { bictorysBaseUrl, isBictorysPaid } from "@/lib/bictorys";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const metadata = { title: "Vérification du paiement" };
 
-// Server component to handle payment verification
+type Outcome = "success" | "failed" | "pending";
+
+async function activatePremium(userId: string, tier: string) {
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 30);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { isPremium: true, premiumExpiresAt: expiresAt, subscriptionTier: tier },
+  });
+}
+
 export default async function CallbackPage({
   searchParams,
 }: {
-  searchParams: Promise<{ paymentId?: string; status?: string; transaction_id?: string; id?: string }>;
+  searchParams: Promise<{
+    paymentId?: string;
+    status?: string;
+    transaction_id?: string;
+    id?: string;
+  }>;
 }) {
   const user = await requireUser();
   const params = await searchParams;
 
   const paymentId = params.paymentId;
-  const statusParam = params.status;
-  const bictorysTransactionId = params.transaction_id || params.id || params.paymentId;
+  // Bictorys may append its own transaction id on redirect.
+  const bictorysTxId = params.transaction_id || params.id;
 
-  let isSuccess = false;
+  if (!paymentId && !bictorysTxId) redirect("/subscription");
+
+  // Locate the local payment record (by our id, then by Bictorys id).
+  const payment =
+    (paymentId
+      ? await prisma.payment.findFirst({ where: { id: paymentId, userId: user.id } })
+      : null) ??
+    (bictorysTxId
+      ? await prisma.payment.findFirst({ where: { bictorysId: bictorysTxId, userId: user.id } })
+      : null);
+
+  let outcome: Outcome = "pending";
   let errorMsg = "";
 
-  // 1. Handling Mock checkout callback
-  if (paymentId && statusParam) {
-    isSuccess = statusParam === "success";
-    if (!isSuccess) {
-      errorMsg = "La simulation de paiement a échoué ou a été annulée.";
-    }
-  } 
-  // 2. Handling Real Bictorys checkout callback
-  else if (bictorysTransactionId || paymentId) {
-    const transactionId = bictorysTransactionId || paymentId;
-    
-    // Look up pending payment record by Bictorys chargeId or local ID
-    const payment = await prisma.payment.findFirst({
-      where: {
-        OR: [
-          { bictorysId: transactionId },
-          { id: transactionId }
-        ],
-        userId: user.id,
-      },
-    });
-
-    if (payment) {
-      if (payment.status === "SUCCESS") {
-        isSuccess = true;
-      } else if (payment.bictorysId) {
-        // Fetch transaction status from Bictorys API
-        const apiKey = process.env.BICTORYS_API_KEY;
-        if (apiKey) {
-          try {
-            const isTest = apiKey.toLowerCase().includes("test") || apiKey.startsWith("pk_test") || apiKey.startsWith("sk_test");
-            const url = isTest 
-              ? `https://api.test.bictorys.com/pay/v1/charges/${payment.bictorysId}` 
-              : `https://api.bictorys.com/pay/v1/charges/${payment.bictorysId}`;
-
-            const response = await fetch(url, {
-              headers: {
-                "X-Api-Key": apiKey,
-                "Authorization": `Bearer ${apiKey}`,
-                "Accept": "application/json",
-              },
-            });
-            if (response.ok) {
-              const data = await response.json();
-              // Bictorys success statuses: 'succeeded' / 'authorized'.
-              if (isBictorysPaid(data.status)) {
-                // Update payment to SUCCESS
-                await prisma.payment.update({
-                  where: { id: payment.id },
-                  data: { status: "SUCCESS" },
-                });
-                
-                // Activate Premium
-                const expiresAt = new Date();
-                expiresAt.setDate(expiresAt.getDate() + 30);
-                await prisma.user.update({
-                  where: { id: user.id },
-                  data: {
-                    isPremium: true,
-                    premiumExpiresAt: expiresAt,
-                    subscriptionTier: payment.tier,
-                  },
-                });
-
-                isSuccess = true;
-              } else {
-                await prisma.payment.update({
-                  where: { id: payment.id },
-                  data: { status: "FAILED" },
-                });
-                errorMsg = `Le statut du paiement est : ${data.status}`;
-              }
-            } else {
-              errorMsg = "Impossible de valider le paiement auprès de Bictorys.";
-            }
-          } catch (err) {
-            console.error("Error verifying Bictorys payment:", err);
-            errorMsg = "Une erreur s'est produite lors de la connexion à l'API Bictorys.";
-          }
-        } else {
-          errorMsg = "Configuration Bictorys manquante sur le serveur.";
-        }
-      } else {
-        errorMsg = "Identifiant de transaction Bictorys manquant.";
-      }
-    } else {
-      errorMsg = "Aucune transaction correspondante n'a été trouvée.";
-    }
+  if (!payment) {
+    outcome = "failed";
+    errorMsg = "Aucune transaction correspondante n'a été trouvée.";
+  } else if (payment.status === "SUCCESS") {
+    outcome = "success";
+  } else if (payment.status === "FAILED") {
+    outcome = "failed";
+    errorMsg = "Le paiement a échoué ou a été annulé.";
   } else {
-    redirect("/subscription");
+    // Still PENDING locally. Confirm live only if Bictorys gave us a real
+    // transaction id (distinct from our internal payment id).
+    const txId = bictorysTxId && bictorysTxId !== paymentId ? bictorysTxId : null;
+    const apiKey = process.env.BICTORYS_API_KEY;
+
+    if (txId && apiKey && !apiKey.startsWith("your_")) {
+      try {
+        const res = await fetch(`${bictorysBaseUrl(apiKey)}/transactions/${txId}`, {
+          headers: { "X-API-Key": apiKey, Accept: "application/json" },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (isBictorysPaid(data.status)) {
+            await prisma.payment.update({
+              where: { id: payment.id },
+              data: { status: "SUCCESS", bictorysId: txId },
+            });
+            await activatePremium(user.id, payment.tier);
+            outcome = "success";
+          } else if (
+            ["failed", "cancelled", "reversed"].includes(
+              String(data.status).toLowerCase(),
+            )
+          ) {
+            await prisma.payment.update({
+              where: { id: payment.id },
+              data: { status: "FAILED" },
+            });
+            outcome = "failed";
+            errorMsg = `Statut du paiement : ${data.status}`;
+          }
+          // else: processing/pending -> keep pending
+        }
+      } catch {
+        // network issue -> keep pending, webhook will finalize
+      }
+    }
   }
 
-  return (
-    <div className="mx-auto max-w-md pt-12">
-      {isSuccess ? (
+  if (outcome === "success") {
+    return (
+      <div className="mx-auto max-w-md pt-12">
         <Card className="border-emerald-500/30 bg-emerald-500/5 shadow-xl text-center p-6 animate-in fade-in zoom-in-95 duration-500">
           <CardHeader>
             <div className="mx-auto mb-2 flex size-16 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
-              <CheckCircle2 className="size-10 animate-ping absolute opacity-30" />
               <CheckCircle2 className="size-10" />
             </div>
             <CardTitle className="text-2xl font-bold text-emerald-800 dark:text-emerald-400">
@@ -135,50 +116,83 @@ export default async function CallbackPage({
               Votre abonnement Prevora est maintenant activé.
             </p>
             <p className="text-sm text-muted-foreground">
-              Vous avez désormais accès à l&apos;intégralité des fonctionnalités associées à votre offre Prevora.
+              Vous avez accès à l&apos;intégralité des fonctionnalités de votre offre.
             </p>
           </CardContent>
           <CardFooter className="flex justify-center pt-4">
             <Button asChild className="w-full bg-emerald-600 hover:bg-emerald-700 text-white">
-              <Link href="/dashboard">
-                Accéder au Tableau de bord
-              </Link>
+              <Link href="/dashboard">Accéder au Tableau de bord</Link>
             </Button>
           </CardFooter>
         </Card>
-      ) : (
-        <Card className="border-destructive/30 bg-destructive/5 shadow-xl text-center p-6 animate-in fade-in zoom-in-95 duration-500">
+      </div>
+    );
+  }
+
+  if (outcome === "pending") {
+    return (
+      <div className="mx-auto max-w-md pt-12">
+        <Card className="border-amber-500/30 bg-amber-500/5 shadow-xl text-center p-6">
           <CardHeader>
-            <div className="mx-auto mb-2 flex size-16 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-              <XCircle className="size-10" />
+            <div className="mx-auto mb-2 flex size-16 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400">
+              <Clock className="size-10" />
             </div>
-            <CardTitle className="text-2xl font-bold text-destructive">
-              Échec du paiement
+            <CardTitle className="text-2xl font-bold text-amber-700 dark:text-amber-500">
+              Paiement en cours de confirmation
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-foreground font-medium">
-              Nous n&apos;avons pas pu valider votre transaction.
-            </p>
-            {errorMsg && (
-              <p className="text-xs font-mono bg-destructive/10 text-destructive p-2.5 rounded border border-destructive/20 text-left">
-                Erreur : {errorMsg}
-              </p>
-            )}
             <p className="text-sm text-muted-foreground">
-              Veuillez réessayer ou contacter notre service client si le problème persiste.
+              Nous finalisons la validation de votre paiement. Cela prend
+              généralement quelques secondes. Rafraîchissez cette page ou
+              revenez d&apos;ici un instant.
             </p>
           </CardContent>
-          <CardFooter className="flex justify-center pt-4 gap-3">
+          <CardFooter className="flex justify-center gap-3 pt-4">
             <Button asChild variant="outline" className="flex-1">
-              <Link href="/subscription">Réessayer</Link>
+              <Link href={`/subscription/callback?paymentId=${payment?.id ?? ""}`}>
+                <RefreshCw className="size-4" /> Rafraîchir
+              </Link>
             </Button>
             <Button asChild className="flex-1">
-              <Link href="/dashboard">Retour</Link>
+              <Link href="/dashboard">Tableau de bord</Link>
             </Button>
           </CardFooter>
         </Card>
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-md pt-12">
+      <Card className="border-destructive/30 bg-destructive/5 shadow-xl text-center p-6 animate-in fade-in zoom-in-95 duration-500">
+        <CardHeader>
+          <div className="mx-auto mb-2 flex size-16 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+            <XCircle className="size-10" />
+          </div>
+          <CardTitle className="text-2xl font-bold text-destructive">
+            Échec du paiement
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-foreground font-medium">
+            Nous n&apos;avons pas pu valider votre transaction.
+          </p>
+          {errorMsg && (
+            <p className="text-xs font-mono bg-destructive/10 text-destructive p-2.5 rounded border border-destructive/20 text-left">
+              {errorMsg}
+            </p>
+          )}
+        </CardContent>
+        <CardFooter className="flex justify-center pt-4 gap-3">
+          <Button asChild variant="outline" className="flex-1">
+            <Link href="/subscription">Réessayer</Link>
+          </Button>
+          <Button asChild className="flex-1">
+            <Link href="/dashboard">Retour</Link>
+          </Button>
+        </CardFooter>
+      </Card>
     </div>
   );
 }
