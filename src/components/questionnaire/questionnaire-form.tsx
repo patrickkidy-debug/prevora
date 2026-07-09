@@ -313,13 +313,13 @@ export function QuestionnaireForm({
       {/* Slide Animation Container */}
       <div className="min-h-[160px] flex flex-col justify-center">
         <form onSubmit={(e) => e.preventDefault()}>
-          <AnimatePresence mode="wait">
+          <AnimatePresence>
             <motion.div
               key={activeQuestion.id}
-              initial={{ opacity: 0, x: 30 }}
+              initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -30 }}
-              transition={{ duration: 0.22, ease: "easeInOut" }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.12, ease: "easeOut" }}
               className="space-y-4"
             >
               <QuestionField question={activeQuestion} control={form.control} />
