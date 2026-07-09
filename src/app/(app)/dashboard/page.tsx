@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { format } from "date-fns";
+import { format, subDays } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Flame, Plus, AlertTriangle, ArrowRight } from "lucide-react";
 import { requireUser } from "@/lib/auth";
@@ -17,6 +17,9 @@ import { TrendChart } from "@/components/dashboard/trend-chart";
 import { scoreLabel } from "@/lib/scoring";
 import { getUserPremiumStatus } from "@/lib/premium";
 import { PremiumPromo } from "@/components/dashboard/premium-promo";
+import { calculatePrevoraHealthScore } from "@/lib/health-score";
+import { HealthScoreRing } from "@/components/dashboard/health-score-ring";
+import { HealthGoals } from "@/components/dashboard/health-goals";
 
 export const metadata = { title: "Tableau de bord" };
 
@@ -42,12 +45,44 @@ export default async function DashboardPage() {
   });
 
   const isPremiumActive = premiumStatus.isPremium;
+  const streak = user.streak?.current ?? 0;
+
+  // Calculate modular health score details
+  const todayScoreDetails = calculatePrevoraHealthScore(today, recent, streak);
+  const currentHealthScore = todayScoreDetails.score;
+
+  // Compare to yesterday (la veille)
+  const yesterdayEntry = recent.find(
+    (e) => format(new Date(e.date), "yyyy-MM-dd") === format(subDays(new Date(), 1), "yyyy-MM-dd")
+  );
+  let diffYesterday = null;
+  if (yesterdayEntry) {
+    const yesterdayDetails = calculatePrevoraHealthScore(
+      yesterdayEntry,
+      recent.filter((e) => e.id !== yesterdayEntry.id),
+      streak
+    );
+    diffYesterday = currentHealthScore - yesterdayDetails.score;
+  }
+
+  // Compare to 7-day average
+  let diff7Days = null;
+  const scores7 = recent.slice(0, 7).map((e) => e.wellbeingScore).filter((s) => s !== null) as number[];
+  if (scores7.length > 0) {
+    const avg7 = scores7.reduce((a, b) => a + b, 0) / scores7.length;
+    diff7Days = Math.round(currentHealthScore - avg7);
+  }
+
+  // Compare to 30-day average
+  let diff30Days = null;
+  const scores30 = recent.map((e) => e.wellbeingScore).filter((s) => s !== null) as number[];
+  if (scores30.length > 0) {
+    const avg30 = scores30.reduce((a, b) => a + b, 0) / scores30.length;
+    diff30Days = Math.round(currentHealthScore - avg30);
+  }
 
   const insight = await generateDailyInsight(recent);
   const analysis = analyzeEntries(recent);
-
-  const wb = today?.wellbeingScore ?? analysis.averages.wellbeingScore ?? null;
-  const streak = user.streak?.current ?? 0;
 
   const last14 = recent.slice(-14);
   const wbData = last14.map((e) => ({
@@ -96,38 +131,26 @@ export default async function DashboardPage() {
         premiumExpiresAt={user.premiumExpiresAt}
       />
 
+      {/* 1. Circular animated indicator for Prevora Health Score */}
+      {recent.length > 0 && (
+        <HealthScoreRing
+          score={currentHealthScore}
+          diffYesterday={diffYesterday}
+          diff7Days={diff7Days}
+          diff30Days={diff30Days}
+          explanations={todayScoreDetails.explanations}
+        />
+      )}
+
       {recent.length === 0 ? (
         <EmptyState />
       ) : (
         <>
-          {/* Wellbeing hero + AI */}
+          {/* 2. Daily Goals and AI summary */}
           <div className="grid gap-4 lg:grid-cols-3">
-            <Card className="lg:col-span-1">
-              <CardHeader>
-                <CardTitle className="text-base">Score bien-être</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col items-center gap-2">
-                <ScoreRing
-                  value={wb ?? 0}
-                  size={160}
-                  strokeWidth={3}
-                  color="var(--color-score-wellbeing)"
-                  label={
-                    <span className="flex flex-col items-center">
-                      <span className="text-4xl font-bold">
-                        {wb != null ? Math.round(wb) : "—"}
-                      </span>
-                      <span className="text-xs text-muted-foreground">/100</span>
-                    </span>
-                  }
-                />
-                {wb != null && (
-                  <p className={`text-sm font-medium ${scoreLabel(wb).tone}`}>
-                    {scoreLabel(wb).label}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+            <div className="lg:col-span-1">
+              <HealthGoals todayEntry={today} />
+            </div>
 
             <div className="lg:col-span-2">
               <AiSummaryCard insight={insight} isLocked={!isPremiumActive} />

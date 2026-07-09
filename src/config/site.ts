@@ -17,6 +17,7 @@ export interface NavItem {
 
 export const dashboardNav: NavItem[] = [
   { href: "/dashboard", label: "Accueil", icon: "layout-dashboard" },
+  { href: "/health-score", label: "Score Santé", icon: "trending-up" },
   { href: "/questionnaire", label: "Questionnaire", icon: "clipboard-list" },
   { href: "/history", label: "Historique", icon: "calendar-days" },
   { href: "/reports", label: "Rapports", icon: "file-text" },
