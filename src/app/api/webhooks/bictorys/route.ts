@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isBictorysPaid } from "@/lib/bictorys";
 
 export async function POST(request: Request) {
   try {
@@ -12,19 +13,21 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { status, paymentReference, merchantReference } = body;
+    const { status, paymentReference, merchantReference, id } = body;
 
-    // Bictorys sends status: 'success', 'approved', 'succès', 'failed', 'échoué'
-    const dbStatus = (status === "success" || status === "approved" || status === "succès") ? "SUCCESS" : "FAILED";
+    // Bictorys success statuses: 'succeeded' / 'authorized' (case-insensitive).
+    const dbStatus = isBictorysPaid(status) ? "SUCCESS" : "FAILED";
 
-    // 1. Look up payment by local ID first (merchantReference), fallback to Bictorys ID (paymentReference)
+    // Match our local payment: merchantReference == payment.id (what we sent),
+    // fall back to the Bictorys charge/transaction id.
     const payment = await prisma.payment.findFirst({
       where: {
         OR: [
           { id: merchantReference },
-          { bictorysId: paymentReference }
-        ]
-      }
+          { bictorysId: paymentReference },
+          { bictorysId: id },
+        ].filter((c) => Object.values(c)[0]),
+      },
     });
 
     if (!payment) {

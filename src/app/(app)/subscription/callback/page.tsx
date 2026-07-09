@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isBictorysPaid } from "@/lib/bictorys";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
@@ -62,12 +63,14 @@ export default async function CallbackPage({
             const response = await fetch(url, {
               headers: {
                 "X-Api-Key": apiKey,
+                "Authorization": `Bearer ${apiKey}`,
+                "Accept": "application/json",
               },
             });
             if (response.ok) {
               const data = await response.json();
-              // Check Bictorys' payment status: 'success' or 'approved'
-              if (data.status === "success" || data.status === "approved" || data.status === "succès") {
+              // Bictorys success statuses: 'succeeded' / 'authorized'.
+              if (isBictorysPaid(data.status)) {
                 // Update payment to SUCCESS
                 await prisma.payment.update({
                   where: { id: payment.id },

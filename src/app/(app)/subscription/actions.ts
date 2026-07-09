@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { bictorysChargesUrl } from "@/lib/bictorys";
 
 const TIER_PRICES: Record<string, number> = {
   ESSENTIAL: 1500,
@@ -47,22 +48,24 @@ export async function startCheckoutAction(formData: FormData) {
     },
   });
 
-  // Real Bictorys checkout
-  try {
-    const isTest = apiKey.toLowerCase().includes("test") || apiKey.startsWith("pk_test") || apiKey.startsWith("sk_test");
-    const url = isTest 
-      ? "https://api.test.bictorys.com/pay/v1/charges" 
-      : "https://api.bictorys.com/pay/v1/charges";
+  // Real Bictorys checkout. NB: keep every redirect() OUTSIDE the try —
+  // Next signals redirects by throwing, which a surrounding catch would swallow.
+  let paymentUrl: string | undefined;
+  let chargeId: string | undefined;
+  let initFailed = false;
 
-    const response = await fetch(url, {
+  try {
+    const response = await fetch(bictorysChargesUrl(apiKey), {
       method: "POST",
       headers: {
         "X-Api-Key": apiKey,
         "Content-Type": "application/json",
+        "Accept": "application/json",
       },
       body: JSON.stringify({
         amount,
         currency: "XOF",
+        country: process.env.BICTORYS_COUNTRY || "CI",
         paymentReference: `Prevora ${tier} - 1 Mois`,
         merchantReference: payment.id,
         successRedirectUrl: `${baseUrl}/subscription/callback?paymentId=${payment.id}&status=success`,
@@ -76,26 +79,33 @@ export async function startCheckoutAction(formData: FormData) {
 
     if (!response.ok) {
       console.error("Bictorys initialization failed:", await response.text());
-      redirect("/subscription?error=bictorys_init");
+      initFailed = true;
+    } else {
+      const data = await response.json();
+      // Bictorys returns the checkout URL as `link` (or `redirectUrl`) and the
+      // charge id as `chargeId` (or `transactionId`).
+      paymentUrl = data.link || data.redirectUrl || data.paymentUrl;
+      chargeId = data.chargeId || data.transactionId || data.id;
     }
-
-    const data = await response.json();
-    if (!data.paymentUrl || !data.chargeId) {
-      console.error("Bictorys invalid response structure:", data);
-      redirect("/subscription?error=bictorys_response");
-    }
-
-    // Save Bictorys transaction identifier in the local payment record
-    await prisma.payment.update({
-      where: { id: payment.id },
-      data: { bictorysId: data.chargeId },
-    });
-
-    redirect(data.paymentUrl);
   } catch (err) {
     console.error("Bictorys payment error:", err);
-    redirect("/subscription?error=checkout_error");
+    initFailed = true;
   }
+
+  if (initFailed) redirect("/subscription?error=bictorys_init");
+  if (!paymentUrl) {
+    console.error("Bictorys response missing payment URL");
+    redirect("/subscription?error=bictorys_response");
+  }
+
+  if (chargeId) {
+    await prisma.payment.update({
+      where: { id: payment.id },
+      data: { bictorysId: chargeId },
+    });
+  }
+
+  redirect(paymentUrl);
 }
 
 /** Simulate a payment outcome in Mock mode */
