@@ -369,7 +369,7 @@ model Payment {
   amount     Float
   currency   String   @default("EUR")
   status     String   // "SUCCESS", "FAILED", "PENDING"
-  bictorysId String?  @unique
+  providerRef String? @unique @map("bictorysId") // payment provider transaction id
   tier       String   @default("STANDARD")
   createdAt  DateTime @default(now())
 

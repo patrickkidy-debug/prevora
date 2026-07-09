@@ -131,21 +131,19 @@ export default async function SubscriptionPage() {
           </span>
         </CardHeader>
         <CardContent className="text-sm p-4 pt-0 sm:p-6 sm:pt-0 space-y-1">
-          {premiumStatus.reason === "trial" && (
+          {premiumStatus.reason === "trial" && premiumStatus.expiresAt && (
             <p>
               Période d&apos;essai active. Accès complet débloqué jusqu&apos;au{" "}
               <strong>
-                {format(premiumStatus.expiresAt!, "d MMMM yyyy 'à' HH:mm", { locale: fr })}
+                {format(new Date(premiumStatus.expiresAt), "d MMMM yyyy 'à' HH:mm", { locale: fr })}
               </strong>.
             </p>
           )}
-          {premiumStatus.reason === "subscription" && (
+          {premiumStatus.reason === "subscription" && premiumStatus.expiresAt && (
             <p>
               Abonnement actif. Prochaine échéance de renouvellement le{" "}
               <strong>
-                {premiumStatus.expiresAt
-                  ? format(premiumStatus.expiresAt, "d MMMM yyyy", { locale: fr })
-                  : "N/A"}
+                {format(new Date(premiumStatus.expiresAt), "d MMMM yyyy", { locale: fr })}
               </strong>.
             </p>
           )}

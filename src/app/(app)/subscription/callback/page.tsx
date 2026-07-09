@@ -1,6 +1,10 @@
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { bictorysBaseUrl, isBictorysPaid } from "@/lib/bictorys";
+import {
+  fedapayUrl,
+  isFedapayApproved,
+  isFedapayFailed,
+} from "@/lib/fedapay";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle2, XCircle, Clock, RefreshCw } from "lucide-react";
@@ -34,18 +38,17 @@ export default async function CallbackPage({
   const params = await searchParams;
 
   const paymentId = params.paymentId;
-  // Bictorys may append its own transaction id on redirect.
-  const bictorysTxId = params.transaction_id || params.id;
+  // FedaPay appends its transaction id on redirect (`id`).
+  const fedapayTxId = params.id || params.transaction_id;
 
-  if (!paymentId && !bictorysTxId) redirect("/subscription");
+  if (!paymentId && !fedapayTxId) redirect("/subscription");
 
-  // Locate the local payment record (by our id, then by Bictorys id).
   const payment =
     (paymentId
       ? await prisma.payment.findFirst({ where: { id: paymentId, userId: user.id } })
       : null) ??
-    (bictorysTxId
-      ? await prisma.payment.findFirst({ where: { bictorysId: bictorysTxId, userId: user.id } })
+    (fedapayTxId
+      ? await prisma.payment.findFirst({ where: { providerRef: fedapayTxId, userId: user.id } })
       : null);
 
   let outcome: Outcome = "pending";
@@ -60,38 +63,38 @@ export default async function CallbackPage({
     outcome = "failed";
     errorMsg = "Le paiement a échoué ou a été annulé.";
   } else {
-    // Still PENDING locally. Confirm live only if Bictorys gave us a real
-    // transaction id (distinct from our internal payment id).
-    const txId = bictorysTxId && bictorysTxId !== paymentId ? bictorysTxId : null;
-    const apiKey = process.env.BICTORYS_API_KEY;
+    // Still PENDING locally — confirm live via FedaPay if we have a tx id.
+    const txId = fedapayTxId ?? payment.providerRef ?? null;
+    const apiKey = process.env.FEDAPAY_SECRET_KEY;
 
     if (txId && apiKey && !apiKey.startsWith("your_")) {
       try {
-        const res = await fetch(`${bictorysBaseUrl(apiKey)}/transactions/${txId}`, {
-          headers: { "X-API-Key": apiKey, Accept: "application/json" },
+        const res = await fetch(fedapayUrl(apiKey, `/transactions/${txId}`), {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            Accept: "application/json",
+          },
         });
         if (res.ok) {
           const data = await res.json();
-          if (isBictorysPaid(data.status)) {
+          const tx = data["v1/transaction"] || data.transaction || data;
+          const status = tx?.status;
+          if (isFedapayApproved(status)) {
             await prisma.payment.update({
               where: { id: payment.id },
-              data: { status: "SUCCESS", bictorysId: txId },
+              data: { status: "SUCCESS", providerRef: String(txId) },
             });
             await activatePremium(user.id, payment.tier);
             outcome = "success";
-          } else if (
-            ["failed", "cancelled", "reversed"].includes(
-              String(data.status).toLowerCase(),
-            )
-          ) {
+          } else if (isFedapayFailed(status)) {
             await prisma.payment.update({
               where: { id: payment.id },
               data: { status: "FAILED" },
             });
             outcome = "failed";
-            errorMsg = `Statut du paiement : ${data.status}`;
+            errorMsg = `Statut du paiement : ${status}`;
           }
-          // else: processing/pending -> keep pending
+          // else pending / processing -> keep pending
         }
       } catch {
         // network issue -> keep pending, webhook will finalize
