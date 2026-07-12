@@ -5,7 +5,7 @@ import { fr } from "date-fns/locale";
 import { redirect } from "next/navigation";
 import { Flame, Plus, AlertTriangle, ArrowRight } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { getRecentEntries, getEntryForDate } from "@/server/entries";
+import { getRecentEntries } from "@/server/entries";
 import { generateDailyInsight } from "@/lib/ai/health";
 import { analyzeEntries } from "@/lib/insights";
 import { Button } from "@/components/ui/button";
@@ -61,10 +61,13 @@ function greeting() {
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const [recent, today] = await Promise.all([
-    getRecentEntries(user.id, 30),
-    getEntryForDate(user.id, new Date()),
-  ]);
+  // One query: today's entry is already within the recent window (derive it),
+  // saving a separate round-trip (~500ms with a distant DB).
+  const recent = await getRecentEntries(user.id, 30);
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const today =
+    recent.find((e) => format(new Date(e.date), "yyyy-MM-dd") === todayStr) ??
+    null;
 
   const premiumStatus = getUserPremiumStatus({
     suspended: user.suspended,
