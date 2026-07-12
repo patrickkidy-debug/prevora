@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { format, subDays } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -21,8 +22,36 @@ import { PremiumPromo } from "@/components/dashboard/premium-promo";
 import { calculatePrevoraHealthScore } from "@/lib/health-score";
 import { HealthScoreRing } from "@/components/dashboard/health-score-ring";
 import { HealthGoals } from "@/components/dashboard/health-goals";
+import { Skeleton } from "@/components/ui/skeleton";
+import { MEDICAL_DISCLAIMER } from "@/config/site";
+import type { EntryLike } from "@/lib/insights";
 
 export const metadata = { title: "Tableau de bord" };
+
+// Streams the AI summary so the dashboard shell renders immediately.
+async function AiSummarySection({ recent }: { recent: EntryLike[] }) {
+  const insight = await generateDailyInsight(recent);
+  return <AiSummaryCard insight={insight} />;
+}
+
+function AiSummarySkeleton() {
+  return (
+    <div className="h-full min-h-[220px] space-y-3 rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 to-transparent p-6">
+      <Skeleton className="h-5 w-32" />
+      <Skeleton className="h-4 w-full" />
+      <Skeleton className="h-4 w-11/12" />
+      <Skeleton className="h-4 w-4/5" />
+      <Skeleton className="h-16 w-full rounded-lg" />
+    </div>
+  );
+}
+
+const EMPTY_INSIGHT = {
+  summary: "",
+  advice: [],
+  trends: [],
+  disclaimer: MEDICAL_DISCLAIMER,
+};
 
 function greeting() {
   const h = new Date().getHours();
@@ -87,7 +116,6 @@ export default async function DashboardPage() {
     diff30Days = Math.round(currentHealthScore - avg30);
   }
 
-  const insight = await generateDailyInsight(recent);
   const analysis = analyzeEntries(recent);
 
   const last14 = recent.slice(-14);
@@ -159,7 +187,13 @@ export default async function DashboardPage() {
             </div>
 
             <div className="lg:col-span-2">
-              <AiSummaryCard insight={insight} isLocked={!isPremiumActive} />
+              {isPremiumActive ? (
+                <Suspense fallback={<AiSummarySkeleton />}>
+                  <AiSummarySection recent={recent} />
+                </Suspense>
+              ) : (
+                <AiSummaryCard insight={EMPTY_INSIGHT} isLocked />
+              )}
             </div>
           </div>
 
