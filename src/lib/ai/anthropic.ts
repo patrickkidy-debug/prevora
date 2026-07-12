@@ -35,6 +35,7 @@ export function createAnthropicProvider(): AIProvider {
             : system,
           messages: rest,
         }),
+        signal: AbortSignal.timeout(9000),
       });
 
       if (!res.ok) throw new Error(`Anthropic API error: ${res.status}`);

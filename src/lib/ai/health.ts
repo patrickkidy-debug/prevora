@@ -3,6 +3,20 @@ import type { ChatMessage } from "./types";
 import { analyzeEntries, type EntryLike, type Analysis } from "@/lib/insights";
 import { MEDICAL_DISCLAIMER } from "@/config/site";
 
+const AI_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS) || 9000;
+
+/**
+ * Bound an AI call so a slow or hung provider never blocks the request.
+ * On timeout it rejects, and the callers fall back to the deterministic output.
+ */
+function withTimeout<T>(promise: Promise<T>, ms = AI_TIMEOUT_MS): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("ai_timeout")), ms);
+  });
+  return Promise.race([promise.finally(() => clearTimeout(timer)), timeout]);
+}
+
 const SYSTEM_PROMPT = `Tu es l'assistant santé de Prevora, une application de PRÉVENTION.
 Règles absolues:
 - Tu ne poses JAMAIS de diagnostic et ne nommes aucune maladie.
@@ -63,10 +77,9 @@ FALLBACK:${fallbackJson}`,
   ];
 
   try {
-    const raw = await getAIProvider().complete(messages, {
-      json: true,
-      temperature: 0.4,
-    });
+    const raw = await withTimeout(
+      getAIProvider().complete(messages, { json: true, temperature: 0.4 }),
+    );
     const parsed = JSON.parse(raw) as Partial<DailyInsight>;
     return {
       summary: parsed.summary || fallbackSummary,
@@ -139,11 +152,13 @@ FALLBACK:${fallbackJson}`,
   ];
 
   try {
-    const raw = await getAIProvider().complete(messages, {
-      json: true,
-      temperature: 0.4,
-      maxTokens: 900,
-    });
+    const raw = await withTimeout(
+      getAIProvider().complete(messages, {
+        json: true,
+        temperature: 0.4,
+        maxTokens: 900,
+      }),
+    );
     const parsed = JSON.parse(raw) as Partial<PeriodReport>;
     return {
       summary: parsed.summary || fallbackSummary,

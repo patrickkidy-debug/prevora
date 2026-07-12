@@ -2,7 +2,11 @@ import OpenAI from "openai";
 import type { AIProvider, ChatMessage, CompletionOptions } from "./types";
 
 export function createOpenAIProvider(): AIProvider {
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const client = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+    timeout: 9000,
+    maxRetries: 1,
+  });
   const model = process.env.AI_MODEL || "gpt-4o-mini";
 
   return {
