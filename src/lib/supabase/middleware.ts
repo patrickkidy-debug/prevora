@@ -13,6 +13,7 @@ const PUBLIC_PATHS = [
   "/offline",
   "/api/webhooks", // provider IPNs — authenticated by signature, not cookies
   "/api/cron", // scheduled jobs — authenticated by CRON_SECRET
+  "/api/diag", // temporary latency probe
 ];
 
 function isPublic(pathname: string) {
