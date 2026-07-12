@@ -10,13 +10,12 @@ import { generateDailyInsight } from "@/lib/ai/health";
 import { analyzeEntries } from "@/lib/insights";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScoreRing } from "@/components/dashboard/score-ring";
-import { ScoreCard } from "@/components/dashboard/score-card";
-import { StatTile } from "@/components/dashboard/stat-tile";
+import { Card, CardContent } from "@/components/ui/card";
+import { KpiCard } from "@/components/dashboard/kpi-card";
 import { AiSummaryCard } from "@/components/dashboard/ai-summary-card";
 import { TrendChart } from "@/components/dashboard/trend-chart";
-import { scoreLabel } from "@/lib/scoring";
+import { QuickActions } from "@/components/dashboard/quick-actions";
+import { Recommendations } from "@/components/dashboard/recommendations";
 import { getUserPremiumStatus } from "@/lib/premium";
 import { PremiumPromo } from "@/components/dashboard/premium-promo";
 import { calculatePrevoraHealthScore } from "@/lib/health-score";
@@ -131,6 +130,19 @@ export default async function DashboardPage() {
   const firstName = user.name?.split(" ")[0] ?? "";
   const criticalAlerts = analysis.alerts.filter((a) => a.consultAdvised);
 
+  // --- KPI sparkline series (last 7 recorded points) + deltas vs yesterday ---
+  const last7 = recent.slice(-7);
+  const num = (arr: (number | null)[]) =>
+    arr.filter((v): v is number => typeof v === "number");
+  const wbSeries = num(last7.map((e) => e.wellbeingScore));
+  const sleepSeries = num(last7.map((e) => e.sleepHours));
+  const hydrationSeries = num(last7.map((e) => e.hydrationGlasses));
+  const activitySeries = num(last7.map((e) => e.activityMinutes));
+  const nutritionSeries = num(last7.map((e) => e.nutritionScore));
+  const dNum = (a?: number | null, b?: number | null) =>
+    a != null && b != null ? a - b : null;
+  const y = yesterdayEntry;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -220,87 +232,88 @@ export default async function DashboardPage() {
             </Card>
           )}
 
-          {/* Score cards */}
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <ScoreCard
+          {/* KPI row — key metrics with sparklines + delta vs yesterday */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <KpiCard
+              label="Score Santé"
+              icon="heart-pulse"
+              value={currentHealthScore}
+              unit="/100"
+              delta={diffYesterday}
+              spark={wbSeries}
+              color="var(--color-score-wellbeing)"
+              href="/health-score"
+            />
+            <KpiCard
               label="Sommeil"
-              value={today?.sleepScore ?? null}
               icon="moon"
-              color="var(--color-score-sleep)"
-            />
-            <ScoreCard
-              label="Stress"
-              value={today?.stressScore ?? null}
-              icon="activity"
-              color="var(--color-score-stress)"
-            />
-            <ScoreCard
-              label="Activité"
-              value={today?.activityScore ?? null}
-              icon="footprints"
-              color="var(--color-score-activity)"
-            />
-            <ScoreCard
-              label="Nutrition"
-              value={today?.nutritionScore ?? null}
-              icon="apple"
-              color="var(--color-score-nutrition)"
-            />
-            <ScoreCard
-              label="Hydratation"
-              value={today?.hydrationScore ?? null}
-              icon="droplet"
-              color="var(--color-score-hydration)"
-            />
-          </div>
-
-          {/* Stat tiles */}
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <StatTile
-              label="Hydratation"
-              value={today?.hydrationGlasses ?? "—"}
-              unit="verres"
-              icon="droplet"
-              color="var(--color-score-hydration)"
-            />
-            <StatTile
-              label="Activité"
-              value={today?.activityMinutes ?? "—"}
-              unit="min"
-              icon="footprints"
-              color="var(--color-score-activity)"
-            />
-            <StatTile
-              label="Sommeil"
               value={today?.sleepHours ?? "—"}
               unit="h"
-              icon="moon"
+              delta={dNum(today?.sleepHours, y?.sleepHours)}
+              deltaSuffix=" h"
+              spark={sleepSeries}
               color="var(--color-score-sleep)"
+              href="/history"
             />
-            <StatTile
-              label="Poids"
-              value={today?.weightKg ?? "—"}
-              unit="kg"
-              icon="scale"
-              color="var(--color-primary)"
+            <KpiCard
+              label="Hydratation"
+              icon="droplet"
+              value={today?.hydrationGlasses ?? "—"}
+              unit="verres"
+              delta={dNum(today?.hydrationGlasses, y?.hydrationGlasses)}
+              deltaSuffix=" v."
+              spark={hydrationSeries}
+              color="var(--color-score-hydration)"
+              href="/questionnaire"
+            />
+            <KpiCard
+              label="Activité"
+              icon="footprints"
+              value={today?.activityMinutes ?? "—"}
+              unit="min"
+              delta={dNum(today?.activityMinutes, y?.activityMinutes)}
+              deltaSuffix=" min"
+              spark={activitySeries}
+              color="var(--color-score-activity)"
+              href="/history"
+            />
+            <KpiCard
+              label="Nutrition"
+              icon="apple"
+              value={today?.nutritionScore ?? "—"}
+              unit="/100"
+              delta={dNum(today?.nutritionScore, y?.nutritionScore)}
+              spark={nutritionSeries}
+              color="var(--color-score-nutrition)"
+              href="/history"
             />
           </div>
 
-          {/* Charts */}
-          <div className="grid gap-4 lg:grid-cols-2">
-            <TrendChart
-              title="Bien-être (14 j)"
-              data={wbData}
-              color="var(--color-score-wellbeing)"
-            />
-            <TrendChart
-              title="Sommeil (14 j)"
-              data={sleepData}
-              color="var(--color-score-sleep)"
-              domain={[0, 12]}
-              unit="h"
-            />
+          {/* Evolution chart + quick actions */}
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <TrendChart
+                title="Évolution du Score Santé"
+                data={wbData}
+                color="var(--color-score-wellbeing)"
+              />
+            </div>
+            <div className="lg:col-span-1">
+              <QuickActions />
+            </div>
           </div>
+
+          {/* Personalized recommendations */}
+          <Recommendations items={analysis.advice} />
+
+          {/* Sleep trend */}
+          <TrendChart
+            title="Sommeil (14 j)"
+            data={sleepData}
+            color="var(--color-score-sleep)"
+            domain={[0, 12]}
+            unit="h"
+          />
         </>
       )}
     </div>
